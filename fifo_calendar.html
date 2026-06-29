@@ -3,20 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FIFO Roster Calendar</title>
+<title>FIFO Roster — Luke Barton</title>
 
 <!--
 =============================================================================
   FIFO ROSTER CALENDAR — QUICK EDIT GUIDE
   Created with Claude (claude.ai) — June 2026
+  Owner: Luke Barton
 =============================================================================
 
   HOW THIS FILE WORKS:
   - Hosted on GitHub Pages, displayed via WebsiteWidget on Samsung S22 Ultra
   - Auto-scrolls to the CURRENT MONTH when opened
   - Swipe/scroll UP and DOWN to see other months
-  - All months from July 2026 to December 2028 are in the page
-  - WebsiteWidget refreshes once per day — month updates automatically
+  - Floating banner at the bottom counts down days until swing ends or break ends
+  - WebsiteWidget refreshes once per day — updates automatically
 
   TO EDIT ON GITHUB:
   - Go to github.com → your repository → fifo_calendar.html
@@ -25,19 +26,35 @@
   - Click "Commit changes" — live within a minute or two
 
 =============================================================================
+  !! IMPORTANT — CREW ASSIGNMENT !!
+=============================================================================
+  At the time this calendar was created, Luke was UNSURE which crew he would
+  be assigned to. The calendar is currently set to CREW A.
+
+  IF YOU NEED TO SWITCH TO CREW B — make ONE change:
+    Find "const MY_CREW = 'A';" below and change to: const MY_CREW = 'B';
+  That single change updates the entire calendar and countdown automatically.
+
+  SCHEDULE LOGIC (same for both crews, just offset by 7 days):
+  - ANCHOR date = Tuesday 7 July 2026 = Crew A Day 1
+  - Every Tuesday = handover/travel day (shown as Travel Day)
+  - Crew A: Tue D1 → Wed-Mon working → Tue D8 (handover) → 6 days off
+  - Crew B: starts on that same Tue D8, works Wed-Mon → Tue handover → 6 days off
+  - Full cycle = 14 days
+  - Crew A working: cycle positions 0 (Tue D1), 1-6 (Wed-Mon), 7 (Tue D8)
+  - Crew B working: cycle positions 7 (Tue D1), 8-13 (Wed-Mon), 0 (Tue D8)
+
+  IF UPLOADING THIS FILE TO A NEW CLAUDE CHAT FOR HELP:
+  - Tell Claude: "I am on Crew A (or B), ANCHOR is 7 July 2026, cycle is 14 days"
+  - MY_CREW variable controls what is shown on the calendar and countdown banner
+  - The myStatus() function returns 'travel', 'work', 'off', or null (pre-roster)
+
+=============================================================================
   SECTION 1 — ROSTER ANCHOR DATE
 =============================================================================
   The ANCHOR is Crew A's very first day (Tuesday 7 July 2026).
   Only change this if the entire roster is reset from a new start date.
-
   Format: new Date(YEAR, MONTH-1, DAY)  <-- month is 0-indexed!
-    new Date(2026, 6, 7)  = 7 July 2026   (6 = July)
-    new Date(2027, 0, 1)  = 1 Jan 2027    (0 = January)
-
-  SCHEDULE LOGIC (8 on / 6 off, Tuesdays always handover):
-  - Crew A: Tue D1 → Wed → Thu → Fri → Sat → Sun → Mon → Tue D8 (handover)
-  - Crew B picks up from that Tuesday, same 8-day pattern
-  - After 8 days: 6 days OFF (Wed–Mon). Full cycle = 14 days.
 =============================================================================
 
 =============================================================================
@@ -54,11 +71,8 @@
 =============================================================================
   Format: "MM-DD": "Name",
   Repeat every year automatically. Zero-padded: "01-16" = 16 Jan.
-
-  CURRENT LIST:
-    01-16 Luke      01-17 Adriana   02-20 Michael   03-01 Mum
-    04-22 Dad       08-17 Steph     08-18 Stefaniya  11-14 David
-    12-20 Kayleen
+  CURRENT: Luke 01-16, Adriana 01-17, Michael 02-20, Mum 03-01,
+           Dad 04-22, Steph 08-17, Stefaniya 08-18, David 11-14, Kayleen 12-20
 =============================================================================
 
 =============================================================================
@@ -66,177 +80,379 @@
 =============================================================================
   Format: "YYYY-MM-DD": "Short Label",
   Add new confirmed dates as announced. Keep old ones — don't replace.
-  Sources:
-    AFL Grand Final  → afl.com.au        (confirmed: 26 Sep 2026)
-    NRL Grand Final  → nrl.com           (confirmed: 4 Oct 2026)
-    Super Bowl LXI   → nfl.com           (confirmed: 14 Feb 2027)
-    Premier League   → premierleague.com (confirmed: 30 May 2027)
-    Super Bowl LXII  → nfl.com           (Feb 13 2028, Atlanta — not yet confirmed)
+  Sources: afl.com.au / nrl.com / nfl.com / premierleague.com
 =============================================================================
 
 =============================================================================
   SECTION 5 — DISPLAY & RANGE SETTINGS
 =============================================================================
-  Cell height:  --cell-height  (reduce if calendar is too tall on screen)
-  Bar font:     --font-bar     (increase if labels are too small)
-  Day number:   --font-day
-  Day headers:  --font-header  (Sun/Mon/Tue etc)
-
-  CALENDAR RANGE: July 2026 → December 2028
-  TO EXTEND: find "const MAX" in the script and change { y: YEAR, m: MONTH }
+  CALENDAR RANGE: June 2026 → December 2028
+  TO EXTEND: find "const MAX" and change { y: YEAR, m: MONTH_INDEX }
   Month index: Jan=0 Feb=1 Mar=2 Apr=3 May=4 Jun=5
                Jul=6 Aug=7 Sep=8 Oct=9 Nov=10 Dec=11
 =============================================================================
 -->
 
 <style>
+  /* =====================================================================
+     DESIGN TOKENS — Dark & Sleek, Premium FIFO Calendar
+     ===================================================================== */
   :root {
-    --cell-height: 58px;
-    --font-bar: 8px;
-    --font-day: 10px;
-    --font-header: 10px;
-    --crew-a-bg: #E6F1FB;
-    --crew-a-border: #B5D4F4;
-    --crew-a-text: #0C447C;
-    --crew-a-bar: #185FA5;
-    --crew-b-bg: #EAF3DE;
-    --crew-b-border: #C0DD97;
-    --crew-b-text: #27500A;
-    --crew-b-bar: #3B6D11;
-    --handover-bg: #FAEEDA;
-    --handover-border: #FAC775;
-    --handover-text: #412402;
-    --handover-bar: #BA7517;
-    --ph-bar: #993556;
-    --bday-bar: #534AB7;
-    --sport-bar: #0F6E56;
-    --today-outline: #D85A30;
-    --off-bg: #3a3a3a;
-    --off-text: #888;
-    --page-bg: #1a1a1a;
-    --surface: #2a2a2a;
-    --text-primary: #f0f0f0;
-    --text-muted: #999;
+    /* Background layers */
+    --bg-base:       #0D0F14;
+    --bg-surface:    #13161E;
+    --bg-raised:     #1A1E2A;
+    --bg-border:     #252A38;
+
+    /* Working day — steel blue */
+    --work-from:     #1A3A6B;
+    --work-to:       #1E4D8C;
+    --work-accent:   #3B82D4;
+    --work-text:     #93C5FD;
+    --work-num:      #BFDBFE;
+
+    /* Travel day — amber dust */
+    --travel-from:   #4A2C00;
+    --travel-to:     #6B3D00;
+    --travel-accent: #D97706;
+    --travel-text:   #FCD34D;
+    --travel-num:    #FDE68A;
+
+    /* Off day */
+    --off-bg:        #13161E;
+    --off-num:       #3A3F52;
+
+    /* Pre-roster */
+    --pre-num:       #252A38;
+
+    /* Accents */
+    --today-ring:    #E8340A;
+    --ph-color:      #9F4576;
+    --bday-color:    #6D5FD8;
+    --sport-color:   #0E7A56;
+    --green-accent:  #1DB854;
+    --red-accent:    #E8340A;
+
+    /* Text */
+    --text-primary:  #E8ECF4;
+    --text-secondary:#8A90A8;
+    --text-muted:    #454C64;
+
+    /* Typography */
+    --font-main: system-ui, -apple-system, sans-serif;
+    --font-mono: ui-monospace, monospace;
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
 
   html, body {
-    background: var(--page-bg);
+    background: var(--bg-base);
     color: var(--text-primary);
-    font-family: system-ui, sans-serif;
-    /* Smooth scrolling for swipe navigation */
+    font-family: var(--font-main);
     scroll-behavior: smooth;
+    min-height: 100vh;
   }
 
-  .wrap { padding: 6px 4px 20px; max-width: 420px; margin: 0 auto; }
-
-  /* Sticky legend + month title at top of each month block */
-  .month-block { margin-bottom: 20px; }
-
-  .month-sticky {
-    position: sticky;
-    top: 0;
-    background: var(--page-bg);
-    z-index: 10;
-    padding: 6px 0 4px;
-    border-bottom: 1px solid #333;
-    margin-bottom: 5px;
+  /* ── Page wrapper ── */
+  .wrap {
+    padding: 0 3px 110px;
+    max-width: 430px;
+    margin: 0 auto;
   }
 
+  /* ── Page header (first month only) ── */
+  .page-header {
+    padding: 18px 8px 12px;
+    text-align: center;
+    border-bottom: 1px solid var(--bg-border);
+    margin-bottom: 4px;
+  }
+  .page-header .title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .page-header .subtitle {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    line-height: 1.1;
+  }
+  .page-header .crew-badge {
+    display: inline-block;
+    margin-top: 8px;
+    background: linear-gradient(135deg, var(--work-from), var(--work-to));
+    border: 1px solid var(--work-accent);
+    color: var(--work-text);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+
+  /* ── Legend ── */
   .legend {
     display: flex;
     flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 10px 6px 8px;
+    border-bottom: 1px solid var(--bg-border);
+    margin-bottom: 4px;
+  }
+  .leg {
+    display: flex;
+    align-items: center;
     gap: 5px;
-    margin-bottom: 5px;
-  }
-
-  /* Only show legend on first month block */
-  .month-block:not(:first-child) .legend { display: none; }
-
-  .leg { display: flex; align-items: center; gap: 3px; font-size: 10px; color: var(--text-muted); }
-  .ldot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
-
-  .month-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    text-align: center;
-    letter-spacing: 0.3px;
-  }
-
-  /* Swipe hint */
-  .swipe-hint {
-    text-align: center;
     font-size: 10px;
-    color: var(--text-muted);
-    margin-bottom: 8px;
-    opacity: 0.7;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+  }
+  .ldot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
   }
 
-  .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-  .dh { text-align: center; font-size: var(--font-header); color: var(--text-muted); padding: 2px 0; font-weight: 500; }
-  .dc { min-height: var(--cell-height); border-radius: 4px; padding: 3px 2px; border: 0.5px solid transparent; }
-  .dn { font-size: var(--font-day); font-weight: 500; margin-bottom: 1px; }
-  .bar { font-size: var(--font-bar); font-weight: 500; border-radius: 2px; padding: 1px 2px; margin-top: 1px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+  /* ── Month block ── */
+  .month-block { margin-bottom: 6px; }
 
-  .today-cell { outline: 1.5px solid var(--today-outline); outline-offset: -1px; }
+  /* Sticky month header */
+  .month-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--bg-base);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 8px 6px 6px;
+    border-bottom: 1px solid var(--bg-border);
+    margin-bottom: 3px;
+  }
+  .month-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .month-title .current-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--today-ring);
+    box-shadow: 0 0 6px var(--today-ring);
+    flex-shrink: 0;
+  }
+  .month-title .spacer { width: 7px; }
 
-  .ca { background: var(--crew-a-bg); border-color: var(--crew-a-border); }
-  .ca .dn { color: var(--crew-a-text); }
-  .cb { background: var(--crew-b-bg); border-color: var(--crew-b-border); }
-  .cb .dn { color: var(--crew-b-text); }
-  .ch { background: var(--handover-bg); border-color: var(--handover-border); }
-  .ch .dn { color: var(--handover-text); }
-  .cn { background: var(--surface); }
-  .cn .dn { color: var(--text-primary); }
+  /* ── Day grid ── */
+  .month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    padding: 0 1px;
+  }
+
+  /* Day headers */
+  .dh {
+    text-align: center;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 4px 0 3px;
+  }
+
+  /* ── Day cells ── */
+  .dc {
+    min-height: 54px;
+    border-radius: 6px;
+    padding: 4px 3px 3px;
+    border: 1px solid transparent;
+    position: relative;
+    overflow: hidden;
+  }
+  .dn {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Pill labels */
+  .pill {
+    display: block;
+    font-size: 7.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border-radius: 3px;
+    padding: 1.5px 3px;
+    margin-top: 2px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+
+  /* Today ring */
+  .today-cell {
+    box-shadow: 0 0 0 1.5px var(--today-ring), 0 0 8px rgba(232,51,10,0.3);
+  }
+  .today-cell .dn { color: var(--today-ring) !important; }
+
+  /* ── Cell types ── */
+
+  /* Working day — gradient + glint signature effect */
+  .cwork {
+    background: linear-gradient(160deg, var(--work-from) 0%, var(--work-to) 100%);
+    border-color: rgba(59,130,212,0.25);
+  }
+  .cwork::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -30%;
+    width: 60%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+    pointer-events: none;
+  }
+  .cwork .dn { color: var(--work-num); }
+
+  /* Travel/handover day */
+  .ctravel {
+    background: linear-gradient(160deg, var(--travel-from) 0%, var(--travel-to) 100%);
+    border-color: rgba(217,119,6,0.3);
+  }
+  .ctravel .dn { color: var(--travel-num); }
+
+  /* Off day — very subtle, just a dark surface */
+  .coff {
+    background: var(--off-bg);
+    border-color: var(--bg-border);
+  }
+  .coff .dn { color: var(--off-num); }
+
+  /* Pre-roster (June before 7 Jul) */
+  .cpre {
+    background: transparent;
+    border-color: transparent;
+  }
+  .cpre .dn { color: var(--pre-num); }
+
+  /* Empty grid spacer */
   .ce { background: transparent; border-color: transparent; }
 
-  .ba  { background: var(--crew-a-bar); }
-  .bb  { background: var(--crew-b-bar); }
-  .bh  { background: var(--handover-bar); }
-  .bph { background: var(--ph-bar); }
-  .bbday { background: var(--bday-bar); }
-  .bsport { background: var(--sport-bar); }
-  .boff { background: var(--off-bg); color: var(--off-text) !important; }
+  /* ── Pill colour variants ── */
+  .pill-work   { background: var(--work-accent);   color: #fff; }
+  .pill-travel { background: var(--travel-accent);  color: #fff; }
+  .pill-ph     { background: var(--ph-color);       color: #fff; }
+  .pill-bday   { background: var(--bday-color);     color: #fff; }
+  .pill-sport  { background: var(--sport-color);    color: #fff; }
 
-  /* Month divider */
-  .month-divider {
-    height: 1px;
-    background: #333;
-    margin: 4px 0 16px;
-  }
-
-  /* Back-to-today button */
+  /* ── Today button ── */
   #today-btn {
     position: fixed;
-    bottom: 16px;
-    right: 12px;
-    background: var(--today-outline);
+    bottom: 16px; right: 12px;
+    background: var(--today-ring);
     color: #fff;
     border: none;
     border-radius: 20px;
-    padding: 6px 12px;
+    padding: 7px 14px;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: 0.04em;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    box-shadow: 0 2px 12px rgba(232,51,10,0.4);
     opacity: 0;
-    transition: opacity 0.3s;
+    transition: opacity 0.25s;
     z-index: 100;
   }
   #today-btn.visible { opacity: 1; }
+
+  /* ── Countdown banner ── */
+  #countdown-banner {
+    position: fixed;
+    bottom: 52px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    background: linear-gradient(135deg, #0D0F14, #161A23);
+    border: 1px solid var(--bg-border);
+    border-radius: 24px;
+    padding: 9px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+    white-space: nowrap;
+    min-width: 230px;
+    justify-content: center;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .cd-icon  { font-size: 16px; line-height: 1; }
+  .cd-main  { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+  .cd-count { display: flex; align-items: baseline; gap: 4px; }
+  .cd-days  {
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .cd-unit  { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .cd-label { font-size: 10px; color: var(--text-muted); letter-spacing: 0.04em; font-weight: 500; }
+
+  #countdown-banner.on-swing  { border-color: rgba(59,130,212,0.4); }
+  #countdown-banner.on-swing  .cd-days { color: var(--work-accent); }
+  #countdown-banner.on-break  { border-color: rgba(29,184,84,0.35); }
+  #countdown-banner.on-break  .cd-days { color: var(--green-accent); }
+  #countdown-banner.on-travel { border-color: rgba(217,119,6,0.4); }
+  #countdown-banner.on-travel .cd-days { color: var(--travel-accent); }
+  #countdown-banner.pre-roster { border-color: var(--bg-border); }
+  #countdown-banner.pre-roster .cd-days { color: var(--text-secondary); }
+
+  /* Divider between months */
+  .month-gap { height: 10px; }
 </style>
 </head>
 <body>
 <div class="wrap" id="wrap"></div>
 <button id="today-btn" onclick="scrollToToday()">↑ Today</button>
+<div id="countdown-banner">
+  <span class="cd-icon" id="cd-icon"></span>
+  <div class="cd-main">
+    <div class="cd-count">
+      <span class="cd-days" id="cd-days"></span>
+      <span class="cd-unit" id="cd-unit"></span>
+    </div>
+    <div class="cd-label" id="cd-label"></div>
+  </div>
+</div>
 
 <script>
 // =============================================================================
 // SECTION 1 — ROSTER ANCHOR DATE
 // =============================================================================
 const ANCHOR = new Date(2026, 6, 7); // 7 July 2026 = Crew A Day 1
+
+// =============================================================================
+// CREW ASSIGNMENT — change 'A' to 'B' if Luke moves to Crew B
+// =============================================================================
+const MY_CREW = 'A';
 
 // =============================================================================
 // SECTION 2 — QUEENSLAND PUBLIC HOLIDAYS
@@ -302,7 +518,6 @@ const BIRTHDAYS = {
   "08-18": "Stefaniya",
   "11-14": "David",
   "12-20": "Kayleen",
-  // Add more: "MM-DD": "Name",
 };
 
 // =============================================================================
@@ -313,23 +528,21 @@ const SPORTS = {
   "2026-10-04": "NRL GF 2026",
   "2027-02-14": "Super Bowl LXI",
   "2027-05-30": "PL Final Day",
-  // Add confirmed future dates below:
   // "2028-02-13": "Super Bowl LXII",
 };
 
 // =============================================================================
 // SECTION 5 — CALENDAR RANGE
-// MIN = first month, MAX = last month
-// Month index: Jan=0, Feb=1, ... Dec=11
 // =============================================================================
 const MIN = { y: 2026, m: 5 };  // June 2026
 const MAX = { y: 2028, m: 11 }; // December 2028
 
 // =============================================================================
-// CALENDAR LOGIC — no need to edit below here
+// CALENDAR LOGIC
 // =============================================================================
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS = ['January','February','March','April','May','June','July',
+                'August','September','October','November','December'];
+const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -337,131 +550,220 @@ function dateKey(d) {
 function mdKey(d) {
   return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-function crewStatus(date) {
+function getPos(date) {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  if (d < ANCHOR) return null;
-  const diff = Math.round((d - ANCHOR) / 86400000);
-  const pos = diff % 14;
-  if (pos === 0 || pos === 7) return 'handover';
-  if (pos >= 1 && pos <= 6) return 'A';
-  return 'B';
+  if (d < ANCHOR) return -1;
+  return Math.round((d - ANCHOR) / 86400000) % 14;
 }
-function crewDay(date) {
-  const diff = Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - ANCHOR) / 86400000);
-  const pos = diff % 14;
-  if (pos === 0) return { type: 'handover', aDay: 1, bDay: 8 };
-  if (pos === 7) return { type: 'handover', aDay: 8, bDay: 1 };
-  if (pos >= 1 && pos <= 6) return { type: 'A', aDay: pos + 1, bOff: pos };
-  return { type: 'B', bDay: pos - 6, aOff: pos - 7 };
+function myStatus(date) {
+  const pos = getPos(date);
+  if (pos === -1) return null;
+  if (MY_CREW === 'A') {
+    if (pos === 0 || pos === 7) return 'travel';
+    if (pos >= 1 && pos <= 6)  return 'work';
+    return 'off';
+  } else {
+    if (pos === 7 || pos === 0) return 'travel';
+    if (pos >= 8 && pos <= 13) return 'work';
+    return 'off';
+  }
+}
+function workDayNum(date) {
+  const pos = getPos(date);
+  if (MY_CREW === 'A') {
+    if (pos === 0) return 1;
+    if (pos >= 1 && pos <= 6) return pos + 1;
+    if (pos === 7) return 8;
+  } else {
+    if (pos === 7) return 1;
+    if (pos >= 8 && pos <= 13) return pos - 6;
+    if (pos === 0) return 8;
+  }
+  return null;
 }
 
 function buildMonth(year, month, isFirst) {
   const first = new Date(year, month, 1);
-  const last = new Date(year, month + 1, 0);
+  const last  = new Date(year, month + 1, 0);
   const today = new Date();
   const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
 
-  let html = `<div class="month-block" id="m-${year}-${month}">
-    <div class="month-sticky">`;
+  let html = `<div class="month-block" id="m-${year}-${month}">`;
 
-  // Legend only on first block
+  // Page header — only on very first month
   if (isFirst) {
-    html += `<div class="legend">
-      <div class="leg"><div class="ldot" style="background:var(--crew-a-bar)"></div>Crew A</div>
-      <div class="leg"><div class="ldot" style="background:var(--crew-b-bar)"></div>Crew B</div>
-      <div class="leg"><div class="ldot" style="background:var(--handover-bar)"></div>Handover</div>
-      <div class="leg"><div class="ldot" style="background:var(--ph-bar)"></div>Public Hol</div>
-      <div class="leg"><div class="ldot" style="background:var(--bday-bar)"></div>Birthday</div>
-      <div class="leg"><div class="ldot" style="background:var(--sport-bar)"></div>Sport</div>
+    html += `<div class="page-header">
+      <div class="title">FIFO Roster</div>
+      <div class="subtitle">Luke Barton</div>
+      <div class="crew-badge">Crew ${MY_CREW} &nbsp;·&nbsp; 8 on / 6 off</div>
+    </div>
+    <div class="legend">
+      <div class="leg"><div class="ldot" style="background:var(--work-accent)"></div>Working</div>
+      <div class="leg"><div class="ldot" style="background:var(--travel-accent)"></div>Travel</div>
+      <div class="leg"><div class="ldot" style="background:var(--off-bg);border:1px solid var(--bg-border)"></div>Days Off</div>
+      <div class="leg"><div class="ldot" style="background:var(--ph-color)"></div>Public Hol</div>
+      <div class="leg"><div class="ldot" style="background:var(--bday-color)"></div>Birthday</div>
+      <div class="leg"><div class="ldot" style="background:var(--sport-color)"></div>Sport</div>
     </div>`;
   }
 
-  html += `<div class="month-title">${MONTHS[month]} ${year}${isCurrentMonth ? ' ◉' : ''}</div>
-    </div>`;
+  // Sticky month title
+  html += `<div class="month-sticky">
+    <div class="month-title">
+      <span class="spacer"></span>
+      <span>${MONTHS[month]} ${year}</span>
+      ${isCurrentMonth ? '<span class="current-dot"></span>' : '<span class="spacer"></span>'}
+    </div>
+  </div>`;
 
-  // Day headers
+  // Grid
   html += `<div class="month-grid">`;
-  DAYS.forEach(d => { html += `<div class="dh">${d}</div>`; });
+  DAYS_SHORT.forEach(d => { html += `<div class="dh">${d}</div>`; });
 
-  // Empty cells before first day
+  // Empty cells
   for (let i = 0; i < first.getDay(); i++) {
-    html += `<div class="dc ce"><div class="dn"> </div></div>`;
+    html += `<div class="dc ce"></div>`;
   }
 
   // Day cells
   for (let d = 1; d <= last.getDate(); d++) {
-    const date = new Date(year, month, d);
-    const status = crewStatus(date);
+    const date    = new Date(year, month, d);
+    const status  = myStatus(date);
     const isToday = date.toDateString() === today.toDateString();
     const dk = dateKey(date);
     const mk = mdKey(date);
     const ph = PUBLIC_HOLIDAYS[dk];
     const bd = BIRTHDAYS[mk];
     const sp = SPORTS[dk];
-    const cd = status ? crewDay(date) : null;
 
-    let cellCls = !status ? 'ce' : status === 'handover' ? 'ch' : status === 'A' ? 'ca' : 'cb';
-    let bars = '';
+    let cellCls = 'cpre';
+    let pills   = '';
 
-    if (status) {
-      if (status === 'handover') {
-        bars += `<div class="bar bh">A D${cd.aDay}+B D${cd.bDay}</div>`;
-      } else if (status === 'A') {
-        bars += `<div class="bar ba">A day ${cd.aDay}</div>`;
-        bars += `<div class="bar boff">B off d${cd.bOff}</div>`;
-      } else {
-        bars += `<div class="bar bb">B day ${cd.bDay}</div>`;
-        bars += `<div class="bar boff">A off d${cd.aOff}</div>`;
-      }
+    if (status === 'travel') {
+      cellCls = 'ctravel';
+      const dn = workDayNum(date);
+      pills += `<span class="pill pill-travel">✈ D${dn}</span>`;
+    } else if (status === 'work') {
+      cellCls = 'cwork';
+      const dn = workDayNum(date);
+      pills += `<span class="pill pill-work">Day ${dn}</span>`;
+    } else if (status === 'off') {
+      cellCls = 'coff';
     }
-    if (ph) bars += `<div class="bar bph">${ph.length > 12 ? ph.substring(0,12)+'…' : ph}</div>`;
-    if (bd)  bars += `<div class="bar bbday">🎂 ${bd}</div>`;
-    if (sp)  bars += `<div class="bar bsport">${sp}</div>`;
 
-    const todayId = isToday ? ' id="today-cell"' : '';
-    html += `<div class="dc ${cellCls}${isToday ? ' today-cell' : ''}"${todayId}>
-      <div class="dn">${d}</div>${bars}
+    if (ph) pills += `<span class="pill pill-ph">${ph.length > 11 ? ph.substring(0,11)+'…' : ph}</span>`;
+    if (bd) pills += `<span class="pill pill-bday">🎂 ${bd}</span>`;
+    if (sp) pills += `<span class="pill pill-sport">${sp}</span>`;
+
+    const todayId  = isToday ? ' id="today-cell"' : '';
+    const todayCls = isToday ? ' today-cell' : '';
+
+    html += `<div class="dc ${cellCls}${todayCls}"${todayId}>
+      <div class="dn">${d}</div>${pills}
     </div>`;
   }
 
-  html += `</div></div>`; // close grid + month-block
+  html += `</div><div class="month-gap"></div></div>`;
   return html;
 }
 
 // Build all months
 const wrap = document.getElementById('wrap');
-let html = '';
-let y = MIN.y, m = MIN.m;
-let isFirst = true;
-while (y < MAX.y || (y === MAX.y && m <= MAX.m)) {
-  html += buildMonth(y, m, isFirst);
+let html = '', y = MIN.y, mo = MIN.m, isFirst = true;
+while (y < MAX.y || (y === MAX.y && mo <= MAX.m)) {
+  html += buildMonth(y, mo, isFirst);
   isFirst = false;
-  m++;
-  if (m > 11) { m = 0; y++; }
+  if (++mo > 11) { mo = 0; y++; }
 }
 wrap.innerHTML = html;
 
-// Auto-scroll to current month
-function scrollToToday() {
-  const el = document.getElementById('today-cell') || document.querySelector('[id^="m-"]');
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  document.getElementById('today-btn').classList.remove('visible');
+// =============================================================================
+// COUNTDOWN BANNER
+// =============================================================================
+function updateCountdown() {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const diff   = Math.round((today - ANCHOR) / 86400000);
+  const banner = document.getElementById('countdown-banner');
+  const icon   = document.getElementById('cd-icon');
+  const days   = document.getElementById('cd-days');
+  const unit   = document.getElementById('cd-unit');
+  const label  = document.getElementById('cd-label');
+
+  // Pre-roster
+  if (diff < 0) {
+    const n = Math.abs(diff) - 1;
+    banner.className  = 'pre-roster';
+    icon.textContent  = '📅';
+    days.textContent  = n;
+    unit.textContent  = n === 1 ? 'day' : 'days';
+    label.textContent = 'until roster starts — 7 Jul';
+    return;
+  }
+
+  const pos = diff % 14;
+  let state, daysLeft;
+
+  if (MY_CREW === 'A') {
+    if (pos === 0)                  { state = 'travel-start'; daysLeft = 7; }
+    else if (pos >= 1 && pos <= 6) { state = 'swing';        daysLeft = 7 - pos; }
+    else if (pos === 7)             { state = 'travel-end';   daysLeft = 0; }
+    else                            { state = 'break';        daysLeft = 14 - pos; }
+  } else {
+    if (pos === 7)                  { state = 'travel-start'; daysLeft = 7; }
+    else if (pos >= 8 && pos <= 13){ state = 'swing';        daysLeft = 14 - pos; }
+    else if (pos === 0)             { state = 'travel-end';   daysLeft = 0; }
+    else                            { state = 'break';        daysLeft = 7 - pos; }
+  }
+
+  if (state === 'travel-end') {
+    banner.className  = 'on-travel';
+    icon.textContent  = '✈️';
+    days.textContent  = 'Last';
+    unit.textContent  = 'day';
+    label.textContent = 'handover & travel home today';
+  } else if (state === 'travel-start') {
+    banner.className  = 'on-travel';
+    icon.textContent  = '✈️';
+    days.textContent  = 'First';
+    unit.textContent  = 'day';
+    label.textContent = `travel in — ${daysLeft} days left on swing`;
+  } else if (state === 'swing') {
+    banner.className  = 'on-swing';
+    icon.textContent  = '⛏️';
+    days.textContent  = daysLeft;
+    unit.textContent  = daysLeft === 1 ? 'day' : 'days';
+    label.textContent = 'until end of swing';
+  } else {
+    banner.className  = 'on-break';
+    icon.textContent  = '🏖️';
+    days.textContent  = daysLeft;
+    unit.textContent  = daysLeft === 1 ? 'day' : 'days';
+    label.textContent = 'until end of break';
+  }
 }
 
-// Small delay to let page render before scrolling
+updateCountdown();
+
+// Auto-scroll to current month on load
+function scrollToToday() {
+  const el = document.getElementById('today-cell');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.getElementById('today-btn').classList.remove('visible');
+}
 setTimeout(() => {
   const today = new Date();
-  const monthEl = document.getElementById(`m-${today.getFullYear()}-${today.getMonth()}`);
-  if (monthEl) monthEl.scrollIntoView({ behavior: 'auto', block: 'start' });
-}, 100);
+  const el = document.getElementById(`m-${today.getFullYear()}-${today.getMonth()}`);
+  if (el) el.scrollIntoView({ behavior: 'auto', block: 'start' });
+}, 80);
 
-// Show "Today" button when user scrolls away from current month
+// Show ↑ Today when scrolled away
 window.addEventListener('scroll', () => {
-  const todayCell = document.getElementById('today-cell');
-  if (!todayCell) return;
-  const rect = todayCell.getBoundingClientRect();
-  const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
-  document.getElementById('today-btn').classList.toggle('visible', !inView);
+  const cell = document.getElementById('today-cell');
+  if (!cell) return;
+  const r = cell.getBoundingClientRect();
+  document.getElementById('today-btn').classList.toggle('visible',
+    r.bottom < 0 || r.top > window.innerHeight);
 });
 </script>
 </body>
