@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIFO Roster Calendar</title>
+
+<!--
+=============================================================================
+  FIFO ROSTER CALENDAR — QUICK EDIT GUIDE
+  Created with Claude (claude.ai) — June 2026
+=============================================================================
+
+  HOW THIS FILE WORKS:
+  - Open this file in any web browser to view/use the calendar interactively
+  - Widgetify (Android app) can display this as a home screen widget
+  - All data you'd ever want to change is in the SECTION BLOCKS below
+  - No coding knowledge needed — just find the right section and edit the values
+
+  TO UPDATE IN WIDGETIFY:
+  - Edit this file on your phone (use "Acode" or "QuickEdit" text editor apps)
+  - Save the file, then tap your Widgetify widget > tap refresh icon
+
+=============================================================================
+  SECTION 1 — ROSTER START DATE & ANCHOR
+=============================================================================
+  The schedule is built around an ANCHOR date — the first day Crew A started.
+  Everything else is calculated from this automatically.
+
+  TO CHANGE THE START DATE: find "const ANCHOR" below and change the date.
+  Format is: new Date(YEAR, MONTH-1, DAY)  <-- note: month is 0-indexed!
+  Examples:
+    new Date(2026, 6, 7)  = 7 July 2026   (month 6 = July)
+    new Date(2026, 0, 1)  = 1 January 2026 (month 0 = January)
+    new Date(2027, 3, 15) = 15 April 2027  (month 3 = April)
+
+  SCHEDULE LOGIC (do not change unless the roster pattern changes):
+  - Every TUESDAY = handover day (both Crew A and Crew B on site)
+  - Crew A cycle: Tue (D1) → Wed → Thu → Fri → Sat → Sun → Mon → Tue (D8 handover)
+  - Crew B picks up from that Tuesday handover and runs the same 8-day pattern
+  - After the 8 days: 6 days OFF (Wed through Mon)
+  - Full repeating cycle = 14 days
+=============================================================================
+-->
+
+<!--
+=============================================================================
+  SECTION 2 — QUEENSLAND PUBLIC HOLIDAYS
+=============================================================================
+  Format: "YYYY-MM-DD": "Holiday Name",
+  - Dates must be in quotes, in YYYY-MM-DD format (e.g. "2027-01-01")
+  - Names should be short (they appear as small labels on the calendar)
+  - Add new years by copying the pattern below and updating the dates
+  - Remove a holiday by deleting its line (make sure to remove the comma too
+    if it's the last entry, or keep the comma if there's another after it)
+
+  SOURCE FOR FUTURE DATES: https://www.queenslandpublicholidays.com.au/
+  (New year dates are usually published in Nov/Dec of the previous year)
+
+  NOTE: Ekka (Royal Queensland Show) is Brisbane-only.
+  If you're not in Brisbane, you can delete or rename those lines.
+=============================================================================
+-->
+
+<!--
+=============================================================================
+  SECTION 3 — FAMILY BIRTHDAYS
+=============================================================================
+  Format: "MM-DD": "Name",
+  - These repeat every year automatically — you only need to enter them once
+  - Month-day only (no year), zero-padded: "01-16" = 16 January
+  - Names should be short to fit in the calendar cell
+
+  CURRENT BIRTHDAYS:
+    01-16  Luke
+    01-17  Adriana
+    02-20  Michael
+    03-01  Mum
+    04-22  Dad
+    08-17  Steph
+    08-18  Stefaniya
+    11-14  David
+    12-20  Kayleen
+
+  TO ADD A BIRTHDAY: add a new line following the same format
+  TO REMOVE A BIRTHDAY: delete its line (watch the trailing comma on last entry)
+=============================================================================
+-->
+
+<!--
+=============================================================================
+  SECTION 4 — SPORTS & SPECIAL EVENTS
+=============================================================================
+  Format: "YYYY-MM-DD": "Short Label",
+  - These are one-off events tied to a specific date each year
+  - When a new year's fixture is confirmed, ADD a new line — don't replace
+  - Keep labels short (10-12 chars max) to fit the calendar cell
+
+  CURRENTLY INCLUDED (confirmed dates only — unconfirmed years left blank):
+    2026-09-26  AFL Grand Final 2026
+    2026-10-04  NRL Grand Final 2026
+    2027-02-14  Super Bowl LXI (Feb 14 2027, SoFi Stadium LA)
+    2027-05-30  Premier League Final Day 2026/27
+
+  DATES NOT YET CONFIRMED (check these sources when dates are announced):
+    AFL Grand Final 2027+  → afl.com.au (usually Sept, last Sat)
+    NRL Grand Final 2027+  → nrl.com (usually first Sun of Oct)
+    Super Bowl 2028        → nfl.com (LXII, Feb 2028, Mercedes-Benz Stadium Atlanta)
+    Premier League 2027/28 → premierleague.com (usually late May)
+
+  TO ADD A NEW EVENT: add a line in the SPORTS object in the script below
+=============================================================================
+-->
+
+<!--
+=============================================================================
+  SECTION 5 — DISPLAY SETTINGS (WIDGETIFY / SCREEN)
+=============================================================================
+  The calendar is optimised for Samsung S22 Ultra screen width (~380px).
+  It auto-loads the CURRENT month when opened (no navigation needed for widget).
+  Navigation arrows are included for when you open the file in a browser.
+
+  CALENDAR DATE RANGE: July 2026 → December 2028
+  TO EXTEND THE RANGE: find "const MAX" below and change the year/month.
+  Format: { y: YEAR, m: MONTH_INDEX }  (month index: Jan=0, Dec=11)
+  Example: { y: 2029, m: 11 } = extends to December 2029
+
+  FONT SIZE: controlled by the CSS variables at the top of the <style> block.
+  If text is too small on the widget, increase --font-bar from 8px to 9px or 10px.
+  If the calendar is too tall for your widget area, reduce --cell-height from 58px.
+=============================================================================
+-->
+
+<style>
+  /* =====================================================================
+     COLOUR & SIZE VARIABLES — easy to tweak without hunting through code
+     ===================================================================== */
+  :root {
+    --cell-height: 58px;   /* height of each day cell — reduce if too tall */
+    --font-bar: 8px;       /* font size for the coloured label bars */
+    --font-day: 10px;      /* font size for the day number */
+    --font-header: 10px;   /* font size for Mon/Tue/Wed etc headers */
+
+    /* Crew A colour (blue) */
+    --crew-a-bg: #E6F1FB;
+    --crew-a-border: #B5D4F4;
+    --crew-a-text: #0C447C;
+    --crew-a-bar: #185FA5;
+
+    /* Crew B colour (green) */
+    --crew-b-bg: #EAF3DE;
+    --crew-b-border: #C0DD97;
+    --crew-b-text: #27500A;
+    --crew-b-bar: #3B6D11;
+
+    /* Handover colour (amber) */
+    --handover-bg: #FAEEDA;
+    --handover-border: #FAC775;
+    --handover-text: #412402;
+    --handover-bar: #BA7517;
+
+    /* Public holiday bar (pink/purple) */
+    --ph-bar: #993556;
+
+    /* Birthday bar (purple) */
+    --bday-bar: #534AB7;
+
+    /* Sports event bar (teal) */
+    --sport-bar: #0F6E56;
+
+    /* Today highlight (orange outline) */
+    --today-outline: #D85A30;
+
+    /* Off-crew label */
+    --off-bg: #e8e8e5;
+    --off-text: #888;
+
+    /* Page background — dark for widget (looks good on home screen) */
+    --page-bg: #1a1a1a;
+    --surface: #2a2a2a;
+    --text-primary: #f0f0f0;
+    --text-muted: #999;
+    --border: #444;
+  }
+
+  /* =====================================================================
+     BASE STYLES
+     ===================================================================== */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--page-bg); color: var(--text-primary); font-family: system-ui, sans-serif; }
+  .wrap { padding: 6px 4px; max-width: 420px; margin: 0 auto; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .leg { display: flex; align-items: center; gap: 3px; font-size: 10px; color: var(--text-muted); }
+  .ldot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+  /* Navigation */
+  .nav { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .nav button { font-size: 16px; padding: 2px 8px; border-radius: 6px; border: 0.5px solid #555; background: var(--surface); color: var(--text-primary); cursor: pointer; }
+  .month-label { font-size: 13px; font-weight: 500; color: var(--text-primary); flex: 1; text-align: center; }
+
+  /* Calendar grid */
+  .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .dh { text-align: center; font-size: var(--font-header); color: var(--text-muted); padding: 2px 0; font-weight: 500; }
+
+  /* Day cells */
+  .dc { min-height: var(--cell-height); border-radius: 4px; padding: 3px 2px; border: 0.5px solid transparent; }
+  .dn { font-size: var(--font-day); font-weight: 500; margin-bottom: 1px; }
+  .bar { font-size: var(--font-bar); font-weight: 500; border-radius: 2px; padding: 1px 2px; margin-top: 1px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+
+  /* Today highlight */
+  .today-cell { outline: 1.5px solid var(--today-outline); outline-offset: -1px; }
+
+  /* Cell background types */
+  .ca { background: var(--crew-a-bg); border-color: var(--crew-a-border); }
+  .ca .dn { color: var(--crew-a-text); }
+  .cb { background: var(--crew-b-bg); border-color: var(--crew-b-border); }
+  .cb .dn { color: var(--crew-b-text); }
+  .ch { background: var(--handover-bg); border-color: var(--handover-border); }
+  .ch .dn { color: var(--handover-text); }
+  .cn { background: var(--surface); }
+  .cn .dn { color: var(--text-primary); }
+  .ce { background: transparent; border-color: transparent; }
+  .ce .dn { color: transparent; }
+
+  /* Coloured bar types */
+  .ba { background: var(--crew-a-bar); }
+  .bb { background: var(--crew-b-bar); }
+  .bh { background: var(--handover-bar); }
+  .bph { background: var(--ph-bar); }
+  .bbday { background: var(--bday-bar); }
+  .bsport { background: var(--sport-bar); }
+  .boff { background: var(--off-bg); color: var(--off-text) !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="legend">
+    <div class="leg"><div class="ldot" style="background:var(--crew-a-bar)"></div>Crew A</div>
+    <div class="leg"><div class="ldot" style="background:var(--crew-b-bar)"></div>Crew B</div>
+    <div class="leg"><div class="ldot" style="background:var(--handover-bar)"></div>Handover</div>
+    <div class="leg"><div class="ldot" style="background:var(--ph-bar)"></div>Public Hol</div>
+    <div class="leg"><div class="ldot" style="background:var(--bday-bar)"></div>Birthday</div>
+    <div class="leg"><div class="ldot" style="background:var(--sport-bar)"></div>Sport</div>
+  </div>
+
+  <div class="nav">
+    <button id="prev">‹</button>
+    <span class="month-label" id="mlabel"></span>
+    <button id="next">›</button>
+  </div>
+
+  <div id="cal"></div>
+
+</div>
+
+<script>
+// =============================================================================
+// SECTION 1 — ROSTER ANCHOR DATE
+// Change this if the roster start date changes.
+// Format: new Date(YEAR, MONTH-1, DAY)
+// =============================================================================
+const ANCHOR = new Date(2026, 6, 7); // 7 July 2026 = Crew A Day 1
+
+// =============================================================================
+// SECTION 2 — QUEENSLAND PUBLIC HOLIDAYS
+// Format: "YYYY-MM-DD": "Short name",
+// Source: https://www.queenslandpublicholidays.com.au/
+// =============================================================================
+const PUBLIC_HOLIDAYS = {
+  // --- 2026 ---
+  "2026-04-03": "Good Friday",
+  "2026-04-04": "Easter Sat",
+  "2026-04-05": "Easter Sun",
+  "2026-04-06": "Easter Mon",
+  "2026-04-25": "ANZAC Day",
+  "2026-05-04": "Labour Day",
+  "2026-08-12": "Ekka (Bris)",    // Brisbane only — delete if not in Brisbane
+  "2026-10-05": "King's B'day",
+  "2026-12-25": "Christmas Day",
+  "2026-12-26": "Boxing Day",
+  "2026-12-28": "Boxing Day+",    // additional day (Boxing Day falls on Sat)
+
+  // --- 2027 ---
+  "2027-01-01": "New Year's Day",
+  "2027-01-26": "Australia Day",
+  "2027-03-26": "Good Friday",
+  "2027-03-27": "Easter Sat",
+  "2027-03-28": "Easter Sun",
+  "2027-03-29": "Easter Mon",
+  "2027-04-26": "ANZAC Day obs.", // observed Mon (falls on Sun)
+  "2027-05-03": "Labour Day",
+  "2027-08-11": "Ekka (Bris)",    // Brisbane only
+  "2027-10-04": "King's B'day",
+  "2027-12-24": "Xmas Eve 6pm",   // part-day only (6pm–midnight)
+  "2027-12-25": "Christmas Day",
+  "2027-12-26": "Boxing Day",
+  "2027-12-27": "Xmas Day+",      // additional day (Xmas falls on Sat)
+  "2027-12-28": "Boxing Day+",    // additional day (Boxing Day falls on Sun)
+
+  // --- 2028 ---
+  "2028-01-01": "New Year's Day",
+  "2028-01-03": "New Year+",      // additional day (New Year falls on Sat)
+  "2028-01-26": "Australia Day",
+  "2028-04-14": "Good Friday",
+  "2028-04-15": "Easter Sat",
+  "2028-04-16": "Easter Sun",
+  "2028-04-17": "Easter Mon",
+  "2028-04-25": "ANZAC Day",
+  "2028-05-01": "Labour Day",
+  "2028-08-16": "Ekka (Bris)",    // Brisbane only
+  "2028-10-02": "King's B'day",
+  "2028-12-24": "Xmas Eve 6pm",   // part-day only (6pm–midnight)
+  "2028-12-25": "Christmas Day",
+  "2028-12-26": "Boxing Day",
+
+  // --- ADD 2029 BELOW WHEN PUBLISHED (usually Nov/Dec 2028) ---
+  // Source: https://www.queenslandpublicholidays.com.au/
+};
+
+// =============================================================================
+// SECTION 3 — FAMILY BIRTHDAYS
+// Format: "MM-DD": "Name",
+// These repeat automatically every year. Month is zero-padded (01 = January).
+// =============================================================================
+const BIRTHDAYS = {
+  "01-16": "Luke",
+  "01-17": "Adriana",
+  "02-20": "Michael",
+  "03-01": "Mum",
+  "04-22": "Dad",
+  "08-17": "Steph",
+  "08-18": "Stefaniya",
+  "11-14": "David",
+  "12-20": "Kayleen",
+  // Add more below in the same format:
+  // "MM-DD": "Name",
+};
+
+// =============================================================================
+// SECTION 4 — SPORTS & SPECIAL EVENTS
+// Format: "YYYY-MM-DD": "Short Label",
+// Add new confirmed dates as they are announced. Keep old ones — don't replace.
+// Sources:
+//   AFL Grand Final → afl.com.au  (confirmed: 26 Sep 2026)
+//   NRL Grand Final → nrl.com     (confirmed: 4 Oct 2026)
+//   Super Bowl      → nfl.com     (confirmed: 14 Feb 2027 — SoFi Stadium LA)
+//   Premier League  → premierleague.com (confirmed: 30 May 2027 final day)
+//   Super Bowl 2028 → LXII, Feb 13 2028, Mercedes-Benz Stadium, Atlanta
+// =============================================================================
+const SPORTS = {
+  "2026-09-26": "AFL GF 2026",
+  "2026-10-04": "NRL GF 2026",
+  "2027-02-14": "Super Bowl LXI",
+  "2027-05-30": "PL Final Day",
+  // Add confirmed future dates below:
+  // "2028-02-13": "Super Bowl LXII",
+};
+
+// =============================================================================
+// SECTION 5 — CALENDAR RANGE
+// MIN = first month shown, MAX = last month shown
+// Format: { y: YEAR, m: MONTH_INDEX }  (Jan=0, Feb=1, ... Dec=11)
+// =============================================================================
+const MIN = { y: 2026, m: 6 };   // July 2026
+const MAX = { y: 2028, m: 11 };  // December 2028
+
+
+// =============================================================================
+// BELOW THIS LINE = calendar logic. No need to edit unless changing behaviour.
+// =============================================================================
+
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function mdKey(d) {
+  return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function crewStatus(date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  if (d < ANCHOR) return null;
+  const diff = Math.round((d - ANCHOR) / 86400000);
+  const pos = diff % 14;
+  if (pos === 0 || pos === 7) return 'handover';
+  if (pos >= 1 && pos <= 6) return 'A';
+  return 'B';
+}
+
+function crewDay(date) {
+  const diff = Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - ANCHOR) / 86400000);
+  const pos = diff % 14;
+  if (pos === 0) return { type: 'handover', aDay: 1, bDay: 8 };
+  if (pos === 7) return { type: 'handover', aDay: 8, bDay: 1 };
+  if (pos >= 1 && pos <= 6) return { type: 'A', aDay: pos + 1, bOff: pos };
+  return { type: 'B', bDay: pos - 6, aOff: pos - 7 };
+}
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function renderMonth(year, month) {
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  const today = new Date();
+  let html = `<div class="month-grid">`;
+  DAYS.forEach(d => { html += `<div class="dh">${d}</div>`; });
+  for (let i = 0; i < first.getDay(); i++) html += `<div class="dc ce"><div class="dn"> </div></div>`;
+
+  for (let d = 1; d <= last.getDate(); d++) {
+    const date = new Date(year, month, d);
+    const status = crewStatus(date);
+    const isToday = date.toDateString() === today.toDateString();
+    const dk = dateKey(date);
+    const mk = mdKey(date);
+    const ph = PUBLIC_HOLIDAYS[dk];
+    const bd = BIRTHDAYS[mk];
+    const sp = SPORTS[dk];
+    const cd = status ? crewDay(date) : null;
+
+    let cellCls = !status ? 'ce' : status === 'handover' ? 'ch' : status === 'A' ? 'ca' : 'cb';
+    let bars = '';
+
+    if (status) {
+      if (status === 'handover') {
+        bars += `<div class="bar bh">A D${cd.aDay}+B D${cd.bDay}</div>`;
+      } else if (status === 'A') {
+        bars += `<div class="bar ba">A day ${cd.aDay}</div>`;
+        bars += `<div class="bar boff">B off d${cd.bOff}</div>`;
+      } else {
+        bars += `<div class="bar bb">B day ${cd.bDay}</div>`;
+        bars += `<div class="bar boff">A off d${cd.aOff}</div>`;
+      }
+    }
+    if (ph) bars += `<div class="bar bph">${ph.length > 12 ? ph.substring(0,12)+'…' : ph}</div>`;
+    if (bd) bars += `<div class="bar bbday">🎂 ${bd}</div>`;
+    if (sp) bars += `<div class="bar bsport">${sp}</div>`;
+
+    html += `<div class="dc ${cellCls}${isToday ? ' today-cell' : ''}">
+      <div class="dn">${d}</div>${bars}
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+// Start on current month (or MIN if current is before range, MAX if after)
+const now = new Date();
+let viewYear = now.getFullYear();
+let viewMonth = now.getMonth();
+if (viewYear < MIN.y || (viewYear === MIN.y && viewMonth < MIN.m)) { viewYear = MIN.y; viewMonth = MIN.m; }
+if (viewYear > MAX.y || (viewYear === MAX.y && viewMonth > MAX.m)) { viewYear = MAX.y; viewMonth = MAX.m; }
+
+function render() {
+  document.getElementById('mlabel').textContent = `${MONTHS[viewMonth]} ${viewYear}`;
+  document.getElementById('cal').innerHTML = renderMonth(viewYear, viewMonth);
+}
+
+document.getElementById('prev').onclick = () => {
+  if (viewYear === MIN.y && viewMonth === MIN.m) return;
+  if (--viewMonth < 0) { viewMonth = 11; viewYear--; }
+  render();
+};
+document.getElementById('next').onclick = () => {
+  if (viewYear === MAX.y && viewMonth === MAX.m) return;
+  if (++viewMonth > 11) { viewMonth = 0; viewYear++; }
+  render();
+};
+
+render();
+</script>
+</body>
+</html>
